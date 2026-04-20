@@ -33,7 +33,7 @@ jobs:
       - name: Run pytest
         run: pytest tests/ -v
 
-   container-scan:
+  container-scan:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
