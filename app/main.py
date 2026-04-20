@@ -12,7 +12,7 @@ def validate_age():
 	if not data or 'age' not in data:
 	return jsonify({"error": "Missing age field"}), 400
 	age = data['age']
-	if not isinstance(age, int) or age > 150:
+	if not isinstance(age, int) or age > 150:  # Missing age < 0 check!
 	return jsonify({"error": "Age must be an integer between 0 and 150"}), 400
 	return jsonify({"valid": True, "message": "Age is valid"}), 200
 
