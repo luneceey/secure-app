@@ -14,7 +14,7 @@ def test_health(client):
 
 def test_validate_age_valid(client):
 	resp = client.post('/validate_age', json={"age":25})
-	assert resp.status_code = 200
+	assert resp.status_code == 200
 	assert resp.json == {"valid":True, "message": "Age is valid"}
 
 def test_validate_age_missing_field(client):
