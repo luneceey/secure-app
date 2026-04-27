@@ -1,4 +1,4 @@
-name: DevSecOps Pipeline
+name: Advanced DevSecOps Pipeline
 
 on:
   push:
@@ -7,6 +7,16 @@ on:
     branches: [ good ]
 
 jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Semgrep SAST
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: .semgrep.yml
+
   dependency-scan:
     runs-on: ubuntu-latest
     steps:
@@ -18,7 +28,14 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
       - name: Run pip-audit
-        run: pip install pip-audit && pip-audit --requirement requirements.txt
+        run: |
+          pip install pip-audit
+          pip-audit --requirement requirements.txt --format json > dependency-scan.json
+      - name: Upload dependency scan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-scan
+          path: dependency-scan.json
 
   unit-tests:
     runs-on: ubuntu-latest
@@ -31,18 +48,56 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
       - name: Run pytest
-        run: pytest tests/ -v
+        run: pytest tests/ -v --junitxml=test-results.xml
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: test-results.xml
 
-  container-scan:
+  build-and-scan:
     runs-on: ubuntu-latest
+    needs: [security-scan, dependency-scan, unit-tests]
     steps:
       - uses: actions/checkout@v4
+
       - name: Build Docker image
-        run: docker build -t secure-app:good .
-      - name: Run Trivy scanner
+        run: docker build -t secure-app:latest .
+
+      - name: Generate SBOM (CycloneDX)
+        uses: anchore/sbom-action@v0
+        with:
+          image: secure-app:latest
+          format: cyclonedx-json
+          output-file: sbom.json
+
+      - name: Run Trivy container scan
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: secure-app:good
-          format: table
+          image-ref: secure-app:latest
+          format: json
+          output: trivy-report.json
           exit-code: 0
           severity: CRITICAL,HIGH
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.json
+
+      - name: Upload Trivy report
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-report
+          path: trivy-report.json
+
+      - name: Mark as trusted build
+        run: |
+          echo "TRUSTED_BUILD=true" > trusted.env
+          echo "IMAGE_SHA=$(git rev-parse --short HEAD)" >> trusted.env
+      - name: Upload trusted build marker
+        uses: actions/upload-artifact@v4
+        with:
+          name: trusted-build
+          path: trusted.env
